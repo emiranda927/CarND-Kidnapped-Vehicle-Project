@@ -87,6 +87,26 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
 	// NOTE: this method will NOT be called by the grading code. But you will probably find it useful to 
 	//   implement this method and use it as a helper during the updateWeights phase.
 
+	for (int i=0; i<observations.size(); i++){
+
+		double min_distance = 9999999.;
+		int id = -1;
+		LandmarkObs obs = observations[i];
+
+		for (int j=0; j<predicted.size(); j++){
+
+			LandmarkObs pred = predicted[i];
+			double distance = dist(obs.x, obs.y, pred.x, pred.y);
+
+			if (distance < min_distance){
+				min_distance = distance;
+				id = pred.id;
+			}
+		}
+
+		observations[i].id = id;
+	}
+
 }
 
 void ParticleFilter::updateWeights(double sensor_range, double std_landmark[], 
@@ -101,12 +121,100 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 	//   and the following is a good resource for the actual equation to implement (look at equation 
 	//   3.33
 	//   http://planning.cs.uiuc.edu/node99.html
+
+	/*for each map landmark
+	* get id and coords for landmarks within sensor range
+	* then add landmark data to prediction vector.
+	* create a vector to store transformed observations from observations
+	* then perform a data association of the predictions in-range and trans. obs.
+	* calculate MV gaussian on associated predictions and transformed obs
+	* update weight of particle
+	*/
+
+	for (int i=0; i<num_particles; i++){
+		double p_x = particles[i].x;
+		double p_y = particles[i].y;
+		double p_theta = particles[i].theta;
+
+		vector<LandmarkObs> landmarks_in_range;
+		vector<LandmarkObs> observations_m;
+
+		for(int j=0; j<map_landmarks.landmark_list.size(); j++){
+			float x_m = map_landmarks.landmark_list[j].x_f;
+			float y_m = map_landmarks.landmark_list[j].y_f;
+			float id_m = map_landmarks.landmark_list[j].id_i;
+
+			if(dist(p_x, p_y, x_m, y_m) <= sensor_range){
+				landmarks_in_range.push_back(LandmarkObs{id_m, x_m, y_m});
+			}
+		}
+
+		for(int k=0; k<observations.size(); k++){
+			double px_m = p_x + (cos(p_theta) * observations[k].x) - (sin(p_theta) * observations[k].y);
+			double py_m = p_y + (sin(p_theta) * observations[k].x) + (cos(p_theta) * observations[k].y);
+			observations_m.push_back(LandmarkObs{observations[k].id, px_m, py_m});
+		}
+
+		dataAssociation(landmarks_in_range, observations_m);
+
+		for (int l=0; l<observations_m.size(); l++){ //for each observation
+			int obs_id = observations_m[l].id; //grab id
+
+			//TEST CODE! UNSURE IF WORKS******************************************************************
+			vector<LandmarkObs>::iterator it = find_if(observations_m.begin(), observations_m.end(), observations_m.id == obs_id)
+			//********************************************************************************************
+			LandmarkObs predicted = *it;
+			double predict_x = predicted[l].x;
+			double predict_y = predicted[l].y;
+
+			//calculate weights
+			double std_x = std_landmark[0];
+			double std_y = std_landmark[1];
+			double c = 1./(2.*M_PI*std_x*std_y);
+			double upper = (pow((predict_x-px_m),2)/(2.*std_x*std_x))+(pow(predict_y-py_m),2)/(2.*std_y*std_y));
+			double p = c*exp(-upper);
+
+			particles[i].weight *= p;
+		}
+	}
 }
 
 void ParticleFilter::resample() {
 	// TODO: Resample particles with replacement with probability proportional to their weight. 
 	// NOTE: You may find std::discrete_distribution helpful here.
 	//   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
+
+	vector<Particle> new_particles;
+
+	  // get all of the current weights
+	  vector<double> weights;
+	  for (int i = 0; i < num_particles; i++) {
+	    weights.push_back(particles[i].weight);
+	  }
+
+	  // generate random starting index for resampling wheel
+	  uniform_int_distribution<int> uniintdist(0, num_particles-1);
+	  auto index = uniintdist(gen);
+
+	  // get max weight
+	  double max_weight = *max_element(weights.begin(), weights.end());
+
+	  // uniform random distribution [0.0, max_weight)
+	  uniform_real_distribution<double> unirealdist(0.0, max_weight);
+
+	  double beta = 0.0;
+
+	  // spin the resample wheel!
+	  for (int i = 0; i < num_particles; i++) {
+	    beta += unirealdist(gen) * 2.0;
+	    while (beta > weights[index]) {
+	      beta -= weights[index];
+	      index = (index + 1) % num_particles;
+	    }
+	    new_particles.push_back(particles[index]);
+	  }
+
+	  particles = new_particles;
 
 }
 
