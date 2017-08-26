@@ -138,6 +138,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 
 		vector<LandmarkObs> landmarks_in_range;
 		vector<LandmarkObs> observations_m;
+		double px_m, py_m;
 
 		for(int j=0; j<map_landmarks.landmark_list.size(); j++){
 			float x_m = map_landmarks.landmark_list[j].x_f;
@@ -150,8 +151,8 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 		}
 
 		for(int k=0; k<observations.size(); k++){
-			double px_m = p_x + (cos(p_theta) * observations[k].x) - (sin(p_theta) * observations[k].y);
-			double py_m = p_y + (sin(p_theta) * observations[k].x) + (cos(p_theta) * observations[k].y);
+			px_m = p_x + (cos(p_theta) * observations[k].x) - (sin(p_theta) * observations[k].y);
+			py_m = p_y + (sin(p_theta) * observations[k].x) + (cos(p_theta) * observations[k].y);
 			observations_m.push_back(LandmarkObs{observations[k].id, px_m, py_m});
 		}
 
@@ -171,7 +172,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 			double std_x = std_landmark[0];
 			double std_y = std_landmark[1];
 			double c = 1./(2.*M_PI*std_x*std_y);
-			double upper = (pow((predict_x-px_m),2)/(2.*std_x*std_x))+(pow(predict_y-py_m),2)/(2.*std_y*std_y));
+			double upper = (pow((predict_x - px_m),2)/(2.*std_x*std_x))+(pow(predict_y-py_m),2)/(2.*std_y*std_y));
 			double p = c*exp(-upper);
 
 			particles[i].weight *= p;
