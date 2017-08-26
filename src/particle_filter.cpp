@@ -25,7 +25,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	//   x, y, theta and their uncertainties from GPS) and all weights to 1. 
 	// Add random Gaussian noise to each particle.
 	// NOTE: Consult particle_filter.h for more information about this method (and others in this file).
-	num_particles = 1000;
+	num_particles = 150;
 	//generate seed for random number generator
 	unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
 	default_random_engine gen(seed);
@@ -49,7 +49,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 		p.x = sample_x;
 		p.y = sample_y;
 		p.theta = sample_theta;
-		p.weight = 1.;
+		p.weight = 1./num_particles;
 		particles.push_back(p);
 	}
 
@@ -89,7 +89,7 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
 
 	for (int i=0; i<observations.size(); i++){
 
-		double min_distance = 9999999.;
+		double min_distance = 999.;
 		int id = -1;
 		LandmarkObs obs = observations[i];
 
@@ -98,7 +98,7 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
 			LandmarkObs pred = predicted[i];
 			double distance = dist(obs.x, obs.y, pred.x, pred.y);
 
-			if (distance < min_distance){
+			if (distance <= min_distance){
 				min_distance = distance;
 				id = pred.id;
 			}
@@ -143,7 +143,7 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 		for(int j=0; j<map_landmarks.landmark_list.size(); j++){
 			float x_m = map_landmarks.landmark_list[j].x_f;
 			float y_m = map_landmarks.landmark_list[j].y_f;
-			float id_m = map_landmarks.landmark_list[j].id_i;
+			int id_m = map_landmarks.landmark_list[j].id_i;
 
 			if(dist(p_x, p_y, x_m, y_m) <= sensor_range){
 				landmarks_in_range.push_back(LandmarkObs{id_m, x_m, y_m});
@@ -159,24 +159,27 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
 		dataAssociation(landmarks_in_range, observations_m);
 
 		for (int l=0; l<observations_m.size(); l++){ //for each observation
-			int obs_id = observations_m[l].id; //grab id
+		  int obs_id = observations_m[l].id; //grab id
+		  double predict_x, predict_y;
 
-			//TEST CODE! UNSURE IF WORKS******************************************************************
-			vector<LandmarkObs>::iterator it = find_if(observations_m.begin(), observations_m.end(), observations_m.id == obs_id)
-			//********************************************************************************************
-			LandmarkObs predicted = *it;
-			double predict_x = predicted[l].x;
-			double predict_y = predicted[l].y;
+		  for (int m=0; m<landmarks_in_range.size(); m++){
+		    if (landmarks_in_range[m].id == obs_id){
+		      predict_x = landmarks_in_range[m].x;
+		      predict_y = landmarks_in_range[m].y;
+		    }
+		  }
 
 			//calculate weights
 			double std_x = std_landmark[0];
 			double std_y = std_landmark[1];
 			double c = 1./(2.*M_PI*std_x*std_y);
-			double upper = (pow((predict_x - px_m),2)/(2.*std_x*std_x))+(pow(predict_y-py_m),2)/(2.*std_y*std_y));
-			double p = c*exp(-upper);
+			double upper = (pow((predict_x - px_m),2)/(2.*std_x*std_x))+(pow((predict_y-py_m),2)/(2.*std_y*std_y));
+			float p = c*exp(-upper);
 
 			particles[i].weight *= p;
 		}
+
+
 	}
 }
 
@@ -185,7 +188,9 @@ void ParticleFilter::resample() {
 	// NOTE: You may find std::discrete_distribution helpful here.
 	//   http://en.cppreference.com/w/cpp/numeric/random/discrete_distribution
 
-	vector<Particle> new_particles;
+  unsigned seed = std::chrono::system_clock::now().time_since_epoch().count();
+  default_random_engine gen (seed);
+  vector<Particle> new_particles;
 
 	  // get all of the current weights
 	  vector<double> weights;
